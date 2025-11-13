@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+  <title>Predictor Aviator</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            primary: "#ef4444",
+            "background-light": "#ffffff",
+            "background-dark": "#1f2937",
+            "text-light": "#1f2937",
+            "text-dark": "#f9fafb",
+            "secondary-light": "#f3f4f6",
+            "secondary-dark": "#374151"
+          },
+          fontFamily: { display: ["Inter", "sans-serif"] },
+          borderRadius: { DEFAULT: "0.5rem" },
+          animation: { 'spin-slow': 'spin 10s linear infinite' }
+        },
+      },
+    };
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <style>
+    body { min-height: max(884px, 100dvh); }
+    .animate-spin-slow { animation: spin 10s linear infinite; }
+  </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+  <div class="flex flex-col min-h-screen">
+    <!-- Header -->
+    <header class="bg-primary text-white p-4 flex items-center justify-between shadow-md">
+      <h1 class="text-xl font-bold">Predictor Aviator</h1>
+      <div class="flex items-center space-x-2">
+        <span id="hora" class="text-sm"></span>
+        <span id="proximo" class="text-xs opacity-80"></span>
+      </div>
+    </header>
+
+    <!-- Main -->
+    <main class="flex-grow flex flex-col items-center justify-center p-4 text-center">
+      <p class="mb-4 text-text-light dark:text-text-dark text-sm">Previsão</p>
+      <img alt="Red airplane icon" class="w-40 h-auto mb-6" src="./img/Logo AV.png" />
+
+      <div class="relative w-64 h-64 flex items-center justify-center mb-6">
+        <div class="absolute inset-0 border-2 border-dashed border-red-400 rounded-full animate-spin-slow"></div>
+        <div class="absolute inset-2 border border-red-400 rounded-full"></div>
+        <div class="absolute w-2 h-2 bg-red-400 rounded-full top-4 left-1/2 -ml-1"></div>
+        <div class="absolute w-2 h-2 bg-red-400 rounded-full bottom-4 left-1/2 -ml-1"></div>
+        <span id="previsao" class="text-5xl font-bold text-red-500 transition-all duration-500">--</span>
+      </div>
+
+      <div class="text-center space-y-1">
+        <p id="confianca" class="text-sm font-medium">Aguardando horário...</p>
+        <p id="historico" class="text-xs text-gray-500 dark:text-gray-400"></p>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import dados, { getResultadosPorHora, media, mediana } from './info.js';
+
+    const previsaoEl = document.getElementById("previsao");
+    const confiancaEl = document.getElementById("confianca");
+    const historicoEl = document.getElementById("historico");
+    const horaEl = document.getElementById("hora");
+    const proximoEl = document.getElementById("proximo");
+
+    let ultimaHora = "";
+
+    // Atualiza relógio
+    function atualizarHora() {
+      const agora = new Date();
+      const h = agora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      horaEl.textContent = h;
+
+      // Próximo minuto
+      const prox = new Date(agora);
+      prox.setMinutes(prox.getMinutes() + 1);
+      prox.setSeconds(0);
+      proximoEl.textContent = `Próximo: ${prox.toLocaleTimeString([], { minute: '2-digit' })}`;
+
+      return h;
+    }
+
+    // Animação de entrada
+    function animarPrevisao(texto) {
+      previsaoEl.classList.remove("scale-125", "opacity-0");
+      previsaoEl.textContent = texto;
+      void previsaoEl.offsetWidth;
+      previsaoEl.classList.add("scale-125");
+    }
+
+    // Função principal: prever com base na hora
+    function preverParaHora(horaAtual) {
+      if (horaAtual === ultimaHora) return;
+      ultimaHora = horaAtual;
+
+      const resultados = getResultadosPorHora(horaAtual);
+      const qtd = resultados.length;
+
+      if (qtd === 0) {
+        animarPrevisao("LOC..");
+        confiancaEl.textContent = "Sem dados históricos";
+        confiancaEl.className = "text-sm font-medium text-gray-500";
+        historicoEl.textContent = "";
+        return;
+      }
+
+      const avg = media(resultados);
+      const med = mediana(resultados);
+      const max = Math.max(...resultados).toFixed(2);
+      const min = Math.min(...resultados).toFixed(2);
+
+      // Previsão: média com leve randomização (±20%)
+      const variacao = (Math.random() - 0.5) * 0.4 * avg;
+      const previsao = Math.max(1.1, parseFloat(avg) + variacao).toFixed(2);
+
+      animarPrevisao(`${previsao}x`);
+
+      // Confiança por repetição
+      let confianca, cor;
+      if (qtd >= 5) { confianca = "Alta"; cor = "text-green-600 dark:text-green-400"; }
+      else if (qtd >= 3) { confianca = "Média"; cor = "text-yellow-600 dark:text-yellow-400"; }
+      else { confianca = "Baixa"; cor = "text-red-600 dark:text-red-400"; }
+
+      confiancaEl.textContent = `Confiança: ${confianca} (${qtd} registro${qtd > 1 ? 's' : ''})`;
+      confiancaEl.className = `text-sm font-medium ${cor}`;
+
+      historicoEl.textContent = `Hist: ${min}x → ${max}x (méd ${avg}x)`;
+    }
+
+    // Atualiza a cada 15 segundos (ou mude para 30)
+    setInterval(() => {
+      const hora = atualizarHora();
+      preverParaHora(hora);
+    }, 15000);
+
+    // Primeira execução
+    const horaInicial = atualizarHora();
+    preverParaHora(horaInicial);
+  </script>
+</body>
+</html>
