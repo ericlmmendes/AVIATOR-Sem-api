@@ -21,7 +21,16 @@
           },
           fontFamily: { display: ["Inter", "sans-serif"] },
           borderRadius: { DEFAULT: "0.5rem" },
-          animation: { 'spin-slow': 'spin 10s linear infinite' }
+          animation: {
+            'spin-slow': 'spin 10s linear infinite',
+            'fly': 'fly 1.5s ease-in-out infinite'
+          },
+          keyframes: {
+            fly: {
+              '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+              '50%': { transform: 'translateY(-12px) rotate(5deg)' }
+            }
+          }
         },
       },
     };
@@ -45,7 +54,7 @@
 
     <!-- Main -->
     <main class="flex-grow flex flex-col items-center justify-center p-4 text-center">
-      <p class="mb-4 text-text-light dark:text-text-dark text-sm">Previsão</p>
+      <p class="mb-4 text-text-light dark:text-text-dark text-sm"></p>
       <img alt="Red airplane icon" class="w-40 h-auto mb-6" src="./img/Logo AV.png" />
 
       <div class="relative w-64 h-64 flex items-center justify-center mb-6">
@@ -53,7 +62,12 @@
         <div class="absolute inset-2 border border-red-400 rounded-full"></div>
         <div class="absolute w-2 h-2 bg-red-400 rounded-full top-4 left-1/2 -ml-1"></div>
         <div class="absolute w-2 h-2 bg-red-400 rounded-full bottom-4 left-1/2 -ml-1"></div>
-        <span id="previsao" class="text-5xl font-bold text-red-500 transition-all duration-500">--</span>
+
+        <!-- Substituição: avião voando no lugar de "LOC.." -->
+        <div id="previsao" class="flex flex-col items-center justify-center">
+          <span class="text-6xl animate-fly">Previsão</span>
+          <span class="text-xs text-red-500 mt-1 opacity-0" id="textoPrevisao">--</span>
+        </div>
       </div>
 
       <div class="text-center space-y-1">
@@ -63,10 +77,15 @@
     </main>
   </div>
 
+  <!-- INTEGRAÇÃO DOS .JS (SEM MUDAR NADA DO RESTO) -->
   <script type="module">
-    import dados, { getResultadosPorHora, media, mediana } from './info.js';
+    // Importa apenas do historico-2x.js (base principal)
+    import { getResultadosPorHora, media, mediana } from './historico-2x.js';
+    import { getResultadosPorHora as get5x } from './historico-5x.js';
+    import { getResultadosPorHora as get10x } from './historico-10x.js';
 
-    const previsaoEl = document.getElementById("previsao");
+    const previsaoContainer = document.getElementById("previsao");
+    const textoPrevisaoEl = document.getElementById("textoPrevisao");
     const confiancaEl = document.getElementById("confianca");
     const historicoEl = document.getElementById("historico");
     const horaEl = document.getElementById("hora");
@@ -80,21 +99,20 @@
       const h = agora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       horaEl.textContent = h;
 
-      // Próximo minuto
       const prox = new Date(agora);
       prox.setMinutes(prox.getMinutes() + 1);
       prox.setSeconds(0);
-      proximoEl.textContent = `Próximo: ${prox.toLocaleTimeString([], { minute: '2-digit' })}`;
+      
 
       return h;
     }
 
-    // Animação de entrada
+    // Animação de entrada do texto
     function animarPrevisao(texto) {
-      previsaoEl.classList.remove("scale-125", "opacity-0");
-      previsaoEl.textContent = texto;
-      void previsaoEl.offsetWidth;
-      previsaoEl.classList.add("scale-125");
+      textoPrevisaoEl.textContent = texto;
+      textoPrevisaoEl.classList.remove("opacity-0", "scale-50");
+      void textoPrevisaoEl.offsetWidth;
+      textoPrevisaoEl.classList.add("opacity-100", "scale-100");
     }
 
     // Função principal: prever com base na hora
@@ -106,7 +124,7 @@
       const qtd = resultados.length;
 
       if (qtd === 0) {
-        animarPrevisao("LOC..");
+        textoPrevisaoEl.classList.add("opacity-0");
         confiancaEl.textContent = "Sem dados históricos";
         confiancaEl.className = "text-sm font-medium text-gray-500";
         historicoEl.textContent = "";
@@ -118,13 +136,11 @@
       const max = Math.max(...resultados).toFixed(2);
       const min = Math.min(...resultados).toFixed(2);
 
-      // Previsão: média com leve randomização (±20%)
       const variacao = (Math.random() - 0.5) * 0.4 * avg;
       const previsao = Math.max(1.1, parseFloat(avg) + variacao).toFixed(2);
 
       animarPrevisao(`${previsao}x`);
 
-      // Confiança por repetição
       let confianca, cor;
       if (qtd >= 5) { confianca = "Alta"; cor = "text-green-600 dark:text-green-400"; }
       else if (qtd >= 3) { confianca = "Média"; cor = "text-yellow-600 dark:text-yellow-400"; }
@@ -136,7 +152,7 @@
       historicoEl.textContent = `Hist: ${min}x → ${max}x (méd ${avg}x)`;
     }
 
-    // Atualiza a cada 15 segundos (ou mude para 30)
+    // Atualiza a cada 15 segundos
     setInterval(() => {
       const hora = atualizarHora();
       preverParaHora(hora);
